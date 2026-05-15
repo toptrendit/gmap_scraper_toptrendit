@@ -10,27 +10,21 @@ jobs:
     steps:
       - name: Start Scraper
         run: |
-          # 1. Chạy Docker đúng lệnh của bạn
+          # 1. Chạy Docker
           mkdir -p gmapsdata
           docker run -d -v "$PWD/gmapsdata:/gmapsdata" -p 8080:8080 gosom/google-maps-scraper -data-folder /gmapsdata
 
       - name: Start Cloudflare Tunnel
         run: |
-          # 2. Bật Tunnel ở chế độ ngẫu nhiên (Ephemeral)
-          # Lệnh này sẽ mở cổng 8080 ra internet qua 1 URL .trycloudflare.com
+          # 2. Bật Tunnel
           nohup cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
           
-          # 3. Đợi 10s để Tunnel sinh URL và lấy nó ra
-          sleep 10
+          # 3. Đợi sinh URL
+          sleep 15
+          
+          # 4. IN URL RA LOG (Cực kỳ quan trọng để n8n đọc được)
           TUNNEL_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1)
-          echo "URL tạm thời: $TUNNEL_URL"
+          echo "FINAL_TUNNEL_URL=$TUNNEL_URL"
           
-          # 4. Bắn cái URL này về n8n để n8n bắt đầu làm việc
-          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
-            -H "Content-Type: application/json" \
-            -d "{\"tunnel_url\": \"$TUNNEL_URL\"}"
-          
-          # 5. Quan trọng: Treo máy ảo để n8n có thời gian vào lấy file
-          # Nếu không có lệnh này, GHA sẽ tắt ngay lập tức và Tunnel sập
-          echo "Tunnel đang mở... Đợi n8n lấy dữ liệu..."
-          sleep 600 # Treo 10 phút, n8n lấy xong thì GHA tự đóng sau đó
+          # 5. Treo máy để n8n vào lấy dữ liệu
+          sleep 600
