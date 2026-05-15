@@ -16,15 +16,32 @@ jobs:
 
       - name: Start Cloudflare Tunnel
         run: |
-          # 2. Bật Tunnel
+          # 2. Khởi chạy Tunnel và ép nó ghi log liên tục
           nohup cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
           
-          # 3. Đợi sinh URL
-          sleep 15
-          
-          # 4. IN URL RA LOG (Cực kỳ quan trọng để n8n đọc được)
-          TUNNEL_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1)
-          echo "FINAL_TUNNEL_URL=$TUNNEL_URL"
-          
-          # 5. Treo máy để n8n vào lấy dữ liệu
+          # 3. Vòng lặp "Săn URL" - Đợi tối đa 60 giây
+          echo "Đang chờ Cloudflare sinh URL..."
+          for i in {1..12}; do
+            TUNNEL_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1)
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "------------------------------------------"
+              echo "FINAL_TUNNEL_URL=$TUNNEL_URL"
+              echo "------------------------------------------"
+              # Xuất ra file môi trường để các bước sau của GHA có thể dùng nếu cần
+              echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+              
+              break
+            fi
+            echo "Lần thử $i: Chưa thấy URL, đợi thêm 5 giây..."
+            sleep 5
+          done
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "LỖI: Không khởi tạo được Cloudflare Tunnel sau 60 giây."
+            cat tunnel.log # In log ra để bạn debug xem nó bị kẹt ở đâu
+            exit 1
+          fi
+
+          # 4. Giữ máy ảo sống để n8n làm việc
+          # Chúng ta sẽ dùng API Cancel để hủy máy sau, nhưng cứ để sleep dự phòng
           sleep 600
