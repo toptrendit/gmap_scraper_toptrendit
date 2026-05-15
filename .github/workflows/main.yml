@@ -8,12 +8,14 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
-      - name: Start Scraper & Cloudflare Tunnel
+      - name: Start Scraper
         run: |
           # 1. Chạy Docker đúng lệnh của bạn
           mkdir -p gmapsdata
           docker run -d -v "$PWD/gmapsdata:/gmapsdata" -p 8080:8080 gosom/google-maps-scraper -data-folder /gmapsdata
-          
+
+      - name: Start Cloudflare Tunnel
+        run: |
           # 2. Bật Tunnel ở chế độ ngẫu nhiên (Ephemeral)
           # Lệnh này sẽ mở cổng 8080 ra internet qua 1 URL .trycloudflare.com
           nohup cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
