@@ -1,0 +1,68 @@
+name: GMap Scraper Worker
+
+on:
+  repository_dispatch:
+    types: [run_worker]
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Khởi động Docker Scraper
+        run: |
+          mkdir -p gmapsdata
+          docker run -d \
+            -v "$PWD/gmapsdata:/gmapsdata" \
+            -p 8080:8080 \
+            gosom/google-maps-scraper \
+            -data-folder /gmapsdata
+          
+          # Đợi server sẵn sàng để nhận lệnh
+          until curl -s http://localhost:8080/api/v1/jobs > /dev/null; do
+            echo "Đang đợi server scraper khởi động..."
+            sleep 5
+          done
+
+      - name: 2. Tạo Job và lấy Job ID
+        id: create_job
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/jobs \
+            -H "Content-Type: application/json" \
+            -d '${{ toJson(github.event.client_payload) }}')
+          
+          JOB_ID=$(echo $RESPONSE | jq -r '.id')
+          echo "JOB_ID=$JOB_ID" >> $GITHUB_ENV
+          echo "Đã tạo Job ID: $JOB_ID"
+
+      - name: 3. Đợi cho đến khi Job hoàn thành (Không giới hạn thời gian)
+        run: |
+          echo "Bắt đầu theo dõi trạng thái Job..."
+          while true; do
+            STATUS_RESP=$(curl -s -X GET http://localhost:8080/api/v1/jobs/${{ env.JOB_ID }})
+            STATUS=$(echo $STATUS_RESP | jq -r '.status')
+            
+            echo "Trạng thái hiện tại: [$STATUS]"
+            
+            if [ "$STATUS" == "finished" ]; then
+              echo "Job đã hoàn thành thành công!"
+              break
+            elif [ "$STATUS" == "failed" ]; then
+              echo "Job thất bại tại Scraper!"
+              exit 1
+            fi
+            
+            # Đợi 20 giây trước khi kiểm tra lại để tránh làm phiền server quá mức
+            sleep 20
+          done
+
+      - name: 4. Tải file CSV nguyên bản và gửi về n8n
+        run: |
+          # Tải file CSV từ Scraper
+          curl -s -X GET http://localhost:8080/api/v1/jobs/${{ env.JOB_ID }}/download --output original_result.csv
+          
+          # Gửi y nguyên file về n8n qua Webhook
+          # URL Webhook n8n được lấy từ GitHub Secrets để bảo mật
+          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -F "file=@original_result.csv" \
+            -F "job_id=${{ env.JOB_ID }}" \
+            -F "status=completed"
