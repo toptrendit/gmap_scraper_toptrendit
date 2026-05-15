@@ -35,5 +35,11 @@ jobs:
             sleep 5
           done
           
+      - name: 4. Send Tunnel URL to n8n
+        run: |
+          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d "{\"tunnel_url\": \"$TUNNEL_URL\", \"run_id\": \"${{ github.run_id }}\"}"
+          
           # Treo máy đợi n8n xử lý (hoặc dùng API GitHub Cancel để hủy sớm)
           sleep 600
