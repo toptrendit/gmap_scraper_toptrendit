@@ -19,27 +19,41 @@ jobs:
           mkdir -p gmapsdata
           docker run -d -v "$PWD/gmapsdata:/gmapsdata" -p 8080:8080 gosom/google-maps-scraper -data-folder /gmapsdata
 
-      - name: 3. Start Cloudflare Tunnel
+      - name: 3. Start Tunnel & Send to n8n
         run: |
-          nohup cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
+          # Khởi chạy tunnel âm thầm
+          nohup cloudflared tunnel --no-autoupdate --url http://localhost:8080 > tunnel.log 2>&1 &
           
           echo "Đang chờ Cloudflare sinh URL..."
-          for i in {1..12}; do
-            TUNNEL_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1)
-            if [ -n "$TUNNEL_URL" ]; then
-              echo "------------------------------------------"
-              echo "FINAL_TUNNEL_URL=$TUNNEL_URL"
-              echo "------------------------------------------"
+          TUNNEL_URL=""
+          
+          # Vòng lặp quét tìm URL hợp lệ
+          for i in {1..15}; do
+            sleep 4
+            RAW_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1 | tr -d '\r\n ')
+            if [ -n "$RAW_URL" ]; then
+              TUNNEL_URL=$RAW_URL
               break
             fi
-            sleep 5
+            echo "Lần thử $i: Chưa thấy URL, đang đợi..."
           done
+
+          # Kiểm tra nếu rỗng thì cứu hộ in log
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "LỖI: Không khởi tạo được Tunnel!"
+            cat tunnel.log
+            exit 1
+          fi
+
+          echo "------------------------------------------"
+          echo "FINAL_TUNNEL_URL=$TUNNEL_URL"
+          echo "------------------------------------------"
           
-      - name: 4. Send Tunnel URL to n8n
-        run: |
-          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+          # Bắn URL về n8n
+          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
-            -d "{\"tunnel_url\": \"$TUNNEL_URL\", \"run_id\": \"${{ github.run_id }}\"}"
+            --data-raw "{\"tunnel_url\": \"${TUNNEL_URL}\", \"run_id\": \"${{ github.run_id }}\"}"
           
-          # Treo máy đợi n8n xử lý (hoặc dùng API GitHub Cancel để hủy sớm)
+          # Treo máy ảo đợi n8n xử lý lấy data (Sau đó n8n gọi API Cancel để diệt máy này)
+          echo "Đã gửi URL thành công. Đang treo máy chờ n8n xử lý..."
           sleep 600
