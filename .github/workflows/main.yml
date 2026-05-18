@@ -21,7 +21,7 @@ jobs:
 
       - name: 3. Start Tunnel & Send to n8n
         run: |
-          # Khởi chạy tunnel âm thầm
+          # Khởi chạy tunnel
           nohup cloudflared tunnel --no-autoupdate --url http://localhost:8080 > tunnel.log 2>&1 &
           
           echo "Đang chờ Cloudflare sinh URL..."
@@ -56,6 +56,7 @@ jobs:
             --data-raw "{\"tunnel_url\": \"${TUNNEL_URL}\", \"run_id\": \"${{ github.run_id }}\"}"
           
           # Treo máy ảo đợi n8n xử lý lấy data (Sau đó n8n gọi API Cancel để diệt máy này)
+          echo ""
           echo "------------------------------------------"
           echo "Đã gửi URL thành công. Đang treo máy chờ n8n xử lý..."
           sleep 600
