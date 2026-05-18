@@ -29,7 +29,7 @@ jobs:
           
           # Vòng lặp quét tìm URL hợp lệ
           for i in {1..15}; do
-            sleep 4
+            sleep 5
             RAW_URL=$(grep -o 'https://[-a-z0-9.]*\.trycloudflare\.com' tunnel.log | head -n 1 | tr -d '\r\n ')
             if [ -n "$RAW_URL" ]; then
               TUNNEL_URL=$RAW_URL
@@ -50,10 +50,12 @@ jobs:
           echo "------------------------------------------"
           
           # Bắn URL về n8n
+          echo "------------------------------------------"
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             --data-raw "{\"tunnel_url\": \"${TUNNEL_URL}\", \"run_id\": \"${{ github.run_id }}\"}"
           
           # Treo máy ảo đợi n8n xử lý lấy data (Sau đó n8n gọi API Cancel để diệt máy này)
+          echo "------------------------------------------"
           echo "Đã gửi URL thành công. Đang treo máy chờ n8n xử lý..."
           sleep 600
